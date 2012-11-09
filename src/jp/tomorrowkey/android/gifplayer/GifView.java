@@ -5,10 +5,12 @@ import java.io.FileNotFoundException;
 import java.io.InputStream;
 
 import android.content.Context;
+import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.util.AttributeSet;
+import android.util.TypedValue;
 import android.view.View;
 import android.widget.LinearLayout.LayoutParams;
 
@@ -34,8 +36,14 @@ public class GifView extends View {
 	private long time;
 	private int index;
 
+	/** 
+	 * resourceからDrawableを呼び出した際と同じscale。
+	 * fileからデータを取得した場合やcacheImageには適用されない。
+	 */
+	private float scale;
 	private int resId;
 	private String filePath;
+	
 
 	private boolean playFlag = false;
 
@@ -59,6 +67,21 @@ public class GifView extends View {
 		if (resId > 0)
 			return getContext().getResources().openRawResource(resId);
 		return null;
+	}
+	
+	float getScale() {
+		if (filePath != null) {
+			return 1.0f;
+		}
+
+		if (resId > 0) {
+			final TypedValue value = new TypedValue();
+			final Resources res = getContext().getResources();
+			res.getValue(resId, value, false);
+			return res.getDisplayMetrics().densityDpi / ((float) value.density);
+		}
+
+		return 0;
 	}
 
 	/**
@@ -123,9 +146,12 @@ public class GifView extends View {
 
 		decodeStatus = DECODE_STATUS_DECODING;
 
+		// TODO Threadを毎回作るのは無駄なので別の方法に変える
+		// TODO 同期化が全くされていないので危険。
 		new Thread() {
 			@Override
 			public void run() {
+				scale = getScale();
 				decoder = new GifDecoder();
 				decoder.read(getInputStream());
 				if (decoder.width == 0 || decoder.height == 0) {
@@ -161,6 +187,8 @@ public class GifView extends View {
 			if (imageType == IMAGE_TYPE_STATIC) {
 				canvas.drawBitmap(bitmap, 0, 0, null);
 			} else if (imageType == IMAGE_TYPE_DYNAMIC) {
+				canvas.save();
+				canvas.scale(scale, scale);
 				if (playFlag) {
 					long now = System.currentTimeMillis();
 
@@ -177,6 +205,7 @@ public class GifView extends View {
 					Bitmap bitmap = decoder.getFrame(index);
 					canvas.drawBitmap(bitmap, 0, 0, null);
 				}
+				canvas.restore();
 			} else {
 				canvas.drawBitmap(bitmap, 0, 0, null);
 			}
