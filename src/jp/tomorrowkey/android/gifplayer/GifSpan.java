@@ -77,6 +77,7 @@ public class GifSpan extends ReplacementSpan implements Runnable {
 		} else if (decodeStatus == DECODE_STATUS_DECODED) {
 			if (imageType == IMAGE_TYPE_DYNAMIC) {
 				canvas.save();
+				canvas.translate(x, bottom - height);
 				canvas.scale(scale, scale);
 				if (playFlag) {
 					long now = System.currentTimeMillis();
