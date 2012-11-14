@@ -31,8 +31,9 @@ public class GifView extends View {
 	public int imageType = IMAGE_TYPE_UNKNOWN;
 	public int decodeStatus = DECODE_STATUS_UNDECODE;
 
-	private int width;
-	private int height;
+	private int intrinsicWidth; // autoScale倍済み
+	private int intrinsicHeight; // autoScale倍済み
+	private boolean fitCenter; // viewのサイズに合わせて拡大する
 
 	private long time;
 	private int index;
@@ -40,13 +41,13 @@ public class GifView extends View {
 	/**
 	 * resourceからDrawableを呼び出した際と同じscale。 fileからデータを取得した場合やcacheImageには適用されない。
 	 */
-	private float scale;
+	private float autoScale;
 	private int resId;
 	private String filePath;
 
 	private static Handler bgHandler;
 	private Handler uiHandler;
-	
+
 	private DecodeTask decodeTask;
 
 	private boolean playFlag = false;
@@ -61,11 +62,11 @@ public class GifView extends View {
 	public GifView(Context context) {
 		super(context);
 	}
-	
+
 	public static void setBgHandler(Handler bgHandler) {
 		GifView.bgHandler = bgHandler;
 	}
-	
+
 	private InputStream getInputStream() {
 		if (filePath != null)
 			try {
@@ -77,7 +78,7 @@ public class GifView extends View {
 		return null;
 	}
 
-	float getScale() {
+	float getAutoScale() {
 		if (filePath != null) {
 			return 1.0f;
 		}
@@ -86,15 +87,30 @@ public class GifView extends View {
 			final TypedValue value = new TypedValue();
 			final Resources res = getContext().getResources();
 			res.getValue(resId, value, false);
-			
+
 			if (value.density == TypedValue.DENSITY_NONE) {
 				return 1;
 			}
-			
+
 			return res.getDisplayMetrics().densityDpi / ((float) value.density);
 		}
 
 		return 0;
+	}
+
+	private void fitCenter(final Canvas canvas) {
+		final int coreWidth = getWidth() - getPaddingLeft() - getPaddingRight();
+		final int coreHeight = getHeight() - getPaddingTop()
+				- getPaddingBottom();
+		final float widthScale = ((float) coreWidth) / intrinsicWidth;
+		final float heightScale = ((float) coreHeight) / intrinsicHeight;
+		final float scale = Math.min(widthScale, heightScale);
+
+		final float dx = (coreWidth - intrinsicWidth * scale) / 2;
+		final float dy = (coreHeight - intrinsicHeight * scale) / 2;
+
+		canvas.translate(dx, dy);
+		canvas.scale(scale, scale);
 	}
 
 	/**
@@ -120,9 +136,15 @@ public class GifView extends View {
 		decodeStatus = DECODE_STATUS_UNDECODE;
 		playFlag = false;
 		bitmap = cacheImage;
-		width = bitmap.getWidth();
-		height = bitmap.getHeight();
-		setLayoutParams(new LayoutParams(width, height));
+		intrinsicWidth = bitmap.getWidth();
+		intrinsicHeight = bitmap.getHeight();
+	}
+
+	/**
+	 * NOTE: Viewのサイズが両方不定の場合はfitCenter==falseと同じ動きになる。
+	 */
+	public void setfitCenter(final boolean fitCenter) {
+		this.fitCenter = fitCenter;
 	}
 
 	/**
@@ -148,9 +170,9 @@ public class GifView extends View {
 		decodeStatus = DECODE_STATUS_UNDECODE;
 		playFlag = false;
 		bitmap = cacheImage;
-		width = bitmap.getWidth();
-		height = bitmap.getHeight();
-		setLayoutParams(new LayoutParams(width, height));
+		intrinsicWidth = bitmap.getWidth();
+		intrinsicHeight = bitmap.getHeight();
+		setLayoutParams(new LayoutParams(intrinsicWidth, intrinsicHeight));
 	}
 
 	// attachされていない状態では呼び出せない
@@ -171,7 +193,7 @@ public class GifView extends View {
 	private class DecodeTask implements Runnable {
 
 		private final int resId;
-		private float scale;
+		private float autoScale;
 		private GifDecoder decoder;
 		private int imageType;
 		private long time;
@@ -185,7 +207,7 @@ public class GifView extends View {
 		public void run() {
 			if (Thread.currentThread() != uiHandler.getLooper().getThread()) {
 				// worker threadでのデコード
-				scale = getScale();
+				autoScale = getAutoScale();
 				decoder = new GifDecoder();
 				decoder.read(getInputStream());
 				if (decoder.width == 0 || decoder.height == 0) {
@@ -201,10 +223,10 @@ public class GifView extends View {
 				if (decodeTask != this) {
 					return;
 				}
-				
+
 				decodeTask = null;
 				GifView.this.resId = this.resId;
-				GifView.this.scale = this.scale;
+				GifView.this.autoScale = this.autoScale;
 				GifView.this.decoder = this.decoder;
 				GifView.this.imageType = this.imageType;
 				GifView.this.time = this.time;
@@ -221,9 +243,47 @@ public class GifView extends View {
 	}
 
 	@Override
+	protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+		final int widthMode = MeasureSpec.getMode(widthMeasureSpec);
+		final int heightMode = MeasureSpec.getMode(heightMeasureSpec);
+		final int width = MeasureSpec.getSize(widthMeasureSpec);
+		final int height = MeasureSpec.getSize(heightMeasureSpec);
+		final int paddingWidth = getPaddingLeft() + getPaddingRight();
+		final int paddingHeight = getPaddingTop() + getPaddingBottom();
+		if (fitCenter) {
+			if (widthMode == MeasureSpec.UNSPECIFIED
+					&& heightMode == MeasureSpec.UNSPECIFIED) {
+				setMeasuredDimension(this.intrinsicWidth + paddingWidth,
+						this.intrinsicHeight + paddingHeight);
+			} else if (widthMode == MeasureSpec.UNSPECIFIED) {
+				setMeasuredDimension(this.intrinsicWidth
+						* (height - paddingHeight) / this.intrinsicHeight,
+						height);
+			} else if (heightMode == MeasureSpec.UNSPECIFIED) {
+				setMeasuredDimension(width,
+						(this.intrinsicHeight * width - paddingWidth)
+								/ this.intrinsicWidth);
+			} else {
+				setMeasuredDimension(width, height);
+			}
+		} else {
+			setMeasuredDimension(
+					getDefaultSize(this.intrinsicWidth + paddingWidth,
+							widthMode),
+					getDefaultSize(this.intrinsicHeight + paddingHeight,
+							heightMode));
+		}
+	}
+
+	@Override
 	protected void onDraw(Canvas canvas) {
 		super.onDraw(canvas);
 
+		canvas.save();
+		canvas.translate(getPaddingLeft(), getPaddingTop());
+		if (fitCenter) {
+			fitCenter(canvas);
+		}
 		if (decodeStatus == DECODE_STATUS_UNDECODE) {
 			canvas.drawBitmap(bitmap, 0, 0, null);
 			if (playFlag) {
@@ -237,8 +297,7 @@ public class GifView extends View {
 			if (imageType == IMAGE_TYPE_STATIC) {
 				canvas.drawBitmap(bitmap, 0, 0, null);
 			} else if (imageType == IMAGE_TYPE_DYNAMIC) {
-				canvas.save();
-				canvas.scale(scale, scale);
+				canvas.scale(autoScale, autoScale);
 				if (playFlag) {
 					long now = System.currentTimeMillis();
 
@@ -255,11 +314,11 @@ public class GifView extends View {
 					Bitmap bitmap = decoder.getFrame(index);
 					canvas.drawBitmap(bitmap, 0, 0, null);
 				}
-				canvas.restore();
 			} else {
 				canvas.drawBitmap(bitmap, 0, 0, null);
 			}
 		}
+		canvas.restore();
 	}
 
 	private void incrementFrameIndex() {

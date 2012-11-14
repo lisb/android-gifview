@@ -38,26 +38,27 @@ public class GifSpan extends ReplacementSpan implements Runnable {
 	Handler uiHandler;
 	final View view;
 	final int resId;
-	final int width;
-	final int height;
-	final float scale;
+	final int intrinsicWidth;
+	final int intrinsicHeight;
+	float scale;
+	final boolean adjustToTextSize;
 
-	public GifSpan(final Handler bgHandler, final View view, final int resId) {
+	public GifSpan(final Handler bgHandler, final View view, final int resId,
+			final boolean adjustToTextSize) {
 		this.view = view;
 		this.bgHandler = bgHandler;
 		this.resId = resId;
-
-		this.scale = getScale();
+		this.adjustToTextSize = adjustToTextSize;
 
 		final BitmapFactory.Options opts = new BitmapFactory.Options();
 		opts.inJustDecodeBounds = true;
 		BitmapFactory.decodeResource(view.getResources(), resId, opts);
-		this.width = Math.round(opts.outWidth * this.scale);
-		this.height = Math.round(opts.outHeight * this.scale);
-		
+		this.intrinsicWidth = opts.outWidth;
+		this.intrinsicHeight = opts.outHeight;
+
 		disableHardwareAccelation();
 	}
-	
+
 	@TargetApi(Build.VERSION_CODES.HONEYCOMB)
 	private void disableHardwareAccelation() {
 		// ハードウェアアクセレーションが走っているとEditableなTextViewでinvalidate()が動かないので、
@@ -70,14 +71,21 @@ public class GifSpan extends ReplacementSpan implements Runnable {
 	@Override
 	public int getSize(Paint paint, CharSequence text, int start, int end,
 			FontMetricsInt fm) {
+		if (adjustToTextSize) {
+			final float textSize = paint.getTextSize();
+			scale = getScale(textSize);
+		} else {
+			scale = getAutoScale();
+		}
+
 		if (fm != null) {
-			fm.ascent = -height;
+			fm.ascent = -Math.round(intrinsicHeight * scale);
 			fm.descent = 0;
 
 			fm.top = fm.ascent;
 			fm.bottom = 0;
 		}
-		return width;
+		return Math.round(intrinsicWidth * scale);
 	}
 
 	@Override
@@ -90,7 +98,8 @@ public class GifSpan extends ReplacementSpan implements Runnable {
 		} else if (decodeStatus == DECODE_STATUS_DECODED) {
 			if (imageType == IMAGE_TYPE_DYNAMIC) {
 				canvas.save();
-				canvas.translate(x, bottom - height);
+				canvas.translate(x,
+						bottom - Math.round(intrinsicHeight * scale));
 				canvas.scale(scale, scale);
 				if (playFlag) {
 					long now = System.currentTimeMillis();
@@ -155,12 +164,12 @@ public class GifSpan extends ReplacementSpan implements Runnable {
 		return null;
 	}
 
-	float getScale() {
+	float getAutoScale() {
 		if (resId > 0) {
 			final TypedValue value = new TypedValue();
 			final Resources res = view.getResources();
 			res.getValue(resId, value, false);
-			
+
 			if (value.density == TypedValue.DENSITY_NONE) {
 				return 1;
 			}
@@ -169,6 +178,10 @@ public class GifSpan extends ReplacementSpan implements Runnable {
 		}
 
 		return 0;
+	}
+
+	float getScale(final float fontSize) {
+		return fontSize / intrinsicHeight;
 	}
 
 	private void incrementFrameIndex() {
