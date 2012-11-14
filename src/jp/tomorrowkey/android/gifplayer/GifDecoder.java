@@ -81,7 +81,7 @@ public class GifDecoder {
 		}
 		return delay;
 	}
-
+	
 	/**
 	 * Gets the number of frames read from file.
 	 * 

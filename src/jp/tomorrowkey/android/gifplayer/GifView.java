@@ -300,9 +300,10 @@ public class GifView extends View {
 				canvas.scale(autoScale, autoScale);
 				if (playFlag) {
 					long now = System.currentTimeMillis();
-
+					
 					if (time + decoder.getDelay(index) < now) {
-						time += decoder.getDelay(index);
+						// TODO indexを一つインクリメントするだけではなく、正しい位置までindexを増やすようにする
+						time = now;
 						incrementFrameIndex();
 					}
 					Bitmap bitmap = decoder.getFrame(index);
