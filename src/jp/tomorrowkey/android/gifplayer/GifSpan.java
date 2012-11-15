@@ -41,14 +41,14 @@ public class GifSpan extends ReplacementSpan implements Runnable {
 	final int intrinsicWidth;
 	final int intrinsicHeight;
 	float scale;
-	final boolean adjustToTextSize;
+	final float scaleToTextSize;
 
 	public GifSpan(final Handler bgHandler, final View view, final int resId,
-			final boolean adjustToTextSize) {
+			final float scaleToTextSize) {
 		this.view = view;
 		this.bgHandler = bgHandler;
 		this.resId = resId;
-		this.adjustToTextSize = adjustToTextSize;
+		this.scaleToTextSize = scaleToTextSize; 
 
 		final BitmapFactory.Options opts = new BitmapFactory.Options();
 		opts.inJustDecodeBounds = true;
@@ -71,9 +71,9 @@ public class GifSpan extends ReplacementSpan implements Runnable {
 	@Override
 	public int getSize(Paint paint, CharSequence text, int start, int end,
 			FontMetricsInt fm) {
-		if (adjustToTextSize) {
+		if (scaleToTextSize > 0) {
 			final float textSize = paint.getTextSize();
-			scale = getScale(textSize);
+			scale = scaleToTextSize * textSize / intrinsicHeight;
 		} else {
 			scale = getAutoScale();
 		}
@@ -179,10 +179,6 @@ public class GifSpan extends ReplacementSpan implements Runnable {
 		}
 
 		return 0;
-	}
-
-	float getScale(final float fontSize) {
-		return fontSize / intrinsicHeight;
 	}
 
 	private void incrementFrameIndex() {
