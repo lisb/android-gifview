@@ -1,10 +1,12 @@
-package jp.tomorrowkey.android.gifplayer;
+package jp.tomorrowkey.android.gifplayer.example;
 
 import android.app.Activity;
 import android.os.Bundle;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.widget.Button;
+
+import jp.tomorrowkey.android.gifplayer.GifView;
 
 public class MainActivity extends Activity implements OnClickListener {
 
