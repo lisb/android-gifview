@@ -11,11 +11,14 @@ import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.os.Handler;
 import android.util.AttributeSet;
+import android.util.DisplayMetrics;
+import android.util.Log;
 import android.util.TypedValue;
 import android.view.View;
-import android.widget.LinearLayout.LayoutParams;
 
 public class GifView extends View {
+
+    private static final String TAG = GifView.class.getSimpleName();
 
 	public static final int IMAGE_TYPE_UNKNOWN = 0;
 	public static final int IMAGE_TYPE_STATIC = 1;
@@ -91,6 +94,10 @@ public class GifView extends View {
 			if (value.density == TypedValue.DENSITY_NONE) {
 				return 1;
 			}
+
+            if (value.density == TypedValue.DENSITY_DEFAULT) {
+                return res.getDisplayMetrics().densityDpi / DisplayMetrics.DENSITY_DEFAULT;
+            }
 
 			return res.getDisplayMetrics().densityDpi / ((float) value.density);
 		}
@@ -172,7 +179,8 @@ public class GifView extends View {
 		bitmap = cacheImage;
 		intrinsicWidth = bitmap.getWidth();
 		intrinsicHeight = bitmap.getHeight();
-		setLayoutParams(new LayoutParams(intrinsicWidth, intrinsicHeight));
+
+        Log.d(TAG, "gif set. intrinsicWidth:" + intrinsicWidth + ", intrinsicHeight:" + intrinsicHeight);
 	}
 
 	// attachされていない状態では呼び出せない
@@ -250,6 +258,7 @@ public class GifView extends View {
 		final int height = MeasureSpec.getSize(heightMeasureSpec);
 		final int paddingWidth = getPaddingLeft() + getPaddingRight();
 		final int paddingHeight = getPaddingTop() + getPaddingBottom();
+
 		if (fitCenter) {
 			if (widthMode == MeasureSpec.UNSPECIFIED
 					&& heightMode == MeasureSpec.UNSPECIFIED) {
@@ -263,17 +272,36 @@ public class GifView extends View {
 				setMeasuredDimension(width,
 						(this.intrinsicHeight * width - paddingWidth)
 								/ this.intrinsicWidth);
-			} else {
-				setMeasuredDimension(width, height);
-			}
-		} else {
-			setMeasuredDimension(
-					getDefaultSize(this.intrinsicWidth + paddingWidth,
-							widthMode),
-					getDefaultSize(this.intrinsicHeight + paddingHeight,
-							heightMode));
-		}
+            } else {
+                setMeasuredDimension(measureSize(this.intrinsicWidth + paddingWidth,
+                        widthMeasureSpec), measureSize(this.intrinsicHeight + paddingHeight,
+                        heightMeasureSpec));
+            }
+        } else {
+            setMeasuredDimension(measureSize(this.intrinsicWidth + paddingWidth,
+                    widthMeasureSpec), measureSize(this.intrinsicHeight + paddingHeight,
+                    heightMeasureSpec));
+        }
+        Log.d(TAG,
+                "onMeasured. widthMode:" + widthMode + ", heightMode:" + heightMode +
+                        ", width:" + width + ", height:" + height +
+                        ", instrinsicWidth:" + intrinsicWidth + ", instrinsicHeight:" + intrinsicHeight +
+                        ", measuredWidth:" + getMeasuredWidth() + ", measuredHeight:" + getMeasuredHeight());
 	}
+
+    private static int measureSize(int instrinsicSize, int measureSpec) {
+        final int mode = MeasureSpec.getMode(measureSpec);
+        final int size = MeasureSpec.getSize(measureSpec);
+
+        switch (mode) {
+            case MeasureSpec.EXACTLY:
+                return size;
+            case MeasureSpec.AT_MOST:
+                return instrinsicSize <= size ? instrinsicSize : size;
+            default:
+                return instrinsicSize;
+        }
+    }
 
 	@Override
 	protected void onDraw(Canvas canvas) {
@@ -285,7 +313,10 @@ public class GifView extends View {
 			fitCenter(canvas);
 		}
 		if (decodeStatus == DECODE_STATUS_UNDECODE) {
-			canvas.drawBitmap(bitmap, 0, 0, null);
+            if (bitmap != null) {
+                // layout ファイルのプレビューでエラーが出ないようにしている。
+                canvas.drawBitmap(bitmap, 0, 0, null);
+            }
 			if (playFlag) {
 				decode();
 				invalidate();

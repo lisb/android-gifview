@@ -2,6 +2,8 @@ package jp.tomorrowkey.android.gifplayer.example;
 
 import android.app.Activity;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.HandlerThread;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.widget.Button;
@@ -16,6 +18,12 @@ public class MainActivity extends Activity implements OnClickListener {
 	private Button btnStop;
 	private Button btnPrevFrame;
 	private Button btnNextFrame;
+
+    static {
+        final HandlerThread thread = new HandlerThread("gifplayer-background");
+        thread.start();
+        GifView.setBgHandler(new Handler(thread.getLooper()));
+    }
 
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
