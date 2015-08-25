@@ -3,7 +3,7 @@ apply plugin: 'com.github.dcendents.android-maven'
 
 group = 'jp.tomorrowkey.android.gifplayer'
 archivesBaseName = 'gifplayer'
-version = '1.0-custom-SNAPSHOT'
+version = '1.0.0'
 
 android {
     compileSdkVersion 16
