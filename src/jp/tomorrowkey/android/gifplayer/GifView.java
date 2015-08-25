@@ -86,6 +86,11 @@ public class GifView extends View {
 			final TypedValue value = new TypedValue();
 			final Resources res = getContext().getResources();
 			res.getValue(resId, value, false);
+			
+			if (value.density == TypedValue.DENSITY_NONE) {
+				return 1;
+			}
+			
 			return res.getDisplayMetrics().densityDpi / ((float) value.density);
 		}
 

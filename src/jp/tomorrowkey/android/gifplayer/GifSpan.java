@@ -147,6 +147,11 @@ public class GifSpan extends ReplacementSpan implements Runnable {
 			final TypedValue value = new TypedValue();
 			final Resources res = view.getResources();
 			res.getValue(resId, value, false);
+			
+			if (value.density == TypedValue.DENSITY_NONE) {
+				return 1;
+			}
+
 			return res.getDisplayMetrics().densityDpi / ((float) value.density);
 		}
 
