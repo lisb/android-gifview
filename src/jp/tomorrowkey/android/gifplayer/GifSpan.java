@@ -30,7 +30,7 @@ public class GifSpan extends ReplacementSpan implements Runnable {
 	long time;
 	int index;
 
-	boolean playFlag = true;
+	boolean playFlag = false;
 
 	final Handler bgHandler;
 	Handler uiHandler;
@@ -109,6 +109,7 @@ public class GifSpan extends ReplacementSpan implements Runnable {
 	}
 
 	// バックグランドでdecodeを実行。
+	@Override
 	public void run() {
 		final GifDecoder decoder = new GifDecoder();
 		decoder.read(getInputStream());
@@ -158,4 +159,13 @@ public class GifSpan extends ReplacementSpan implements Runnable {
 		}
 	}
 
+	public void start() {
+		playFlag = true;
+		view.invalidate();
+	}
+	
+	public void pause() {
+		playFlag = false;
+		view.invalidate();
+	}
 }
