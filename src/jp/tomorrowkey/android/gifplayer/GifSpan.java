@@ -2,12 +2,14 @@ package jp.tomorrowkey.android.gifplayer;
 
 import java.io.InputStream;
 
+import android.annotation.TargetApi;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.Paint.FontMetricsInt;
+import android.os.Build;
 import android.os.Handler;
 import android.text.style.ReplacementSpan;
 import android.util.TypedValue;
@@ -46,12 +48,23 @@ public class GifSpan extends ReplacementSpan implements Runnable {
 		this.resId = resId;
 
 		this.scale = getScale();
-		
+
 		final BitmapFactory.Options opts = new BitmapFactory.Options();
 		opts.inJustDecodeBounds = true;
 		BitmapFactory.decodeResource(view.getResources(), resId, opts);
 		this.width = Math.round(opts.outWidth * this.scale);
 		this.height = Math.round(opts.outHeight * this.scale);
+		
+		disableHardwareAccelation();
+	}
+	
+	@TargetApi(Build.VERSION_CODES.HONEYCOMB)
+	private void disableHardwareAccelation() {
+		// ハードウェアアクセレーションが走っているとEditableなTextViewでinvalidate()が動かないので、
+		// 無効化する。
+		if (Build.VERSION.SDK_INT >= 11) {
+			view.setLayerType(View.LAYER_TYPE_SOFTWARE, null);
+		}
 	}
 
 	@Override
@@ -169,7 +182,7 @@ public class GifSpan extends ReplacementSpan implements Runnable {
 		playFlag = true;
 		view.invalidate();
 	}
-	
+
 	public void pause() {
 		playFlag = false;
 		view.invalidate();
