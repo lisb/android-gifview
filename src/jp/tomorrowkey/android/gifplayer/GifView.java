@@ -9,6 +9,7 @@ import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
+import android.os.Handler;
 import android.util.AttributeSet;
 import android.util.TypedValue;
 import android.view.View;
@@ -36,14 +37,17 @@ public class GifView extends View {
 	private long time;
 	private int index;
 
-	/** 
-	 * resourceからDrawableを呼び出した際と同じscale。
-	 * fileからデータを取得した場合やcacheImageには適用されない。
+	/**
+	 * resourceからDrawableを呼び出した際と同じscale。 fileからデータを取得した場合やcacheImageには適用されない。
 	 */
 	private float scale;
 	private int resId;
 	private String filePath;
+
+	private static Handler bgHandler;
+	private Handler uiHandler;
 	
+	private DecodeTask decodeTask;
 
 	private boolean playFlag = false;
 
@@ -57,7 +61,11 @@ public class GifView extends View {
 	public GifView(Context context) {
 		super(context);
 	}
-
+	
+	public static void setBgHandler(Handler bgHandler) {
+		GifView.bgHandler = bgHandler;
+	}
+	
 	private InputStream getInputStream() {
 		if (filePath != null)
 			try {
@@ -68,7 +76,7 @@ public class GifView extends View {
 			return getContext().getResources().openRawResource(resId);
 		return null;
 	}
-	
+
 	float getScale() {
 		if (filePath != null) {
 			return 1.0f;
@@ -140,17 +148,38 @@ public class GifView extends View {
 		setLayoutParams(new LayoutParams(width, height));
 	}
 
+	// attachされていない状態では呼び出せない
 	private void decode() {
 		release();
 		index = 0;
 
+		uiHandler = getHandler();
 		decodeStatus = DECODE_STATUS_DECODING;
+		if (decodeTask != null) {
+			bgHandler.removeCallbacks(decodeTask);
+			uiHandler.removeCallbacks(decodeTask);
+		}
+		decodeTask = new DecodeTask(resId);
+		bgHandler.post(decodeTask);
+	}
 
-		// TODO Threadを毎回作るのは無駄なので別の方法に変える
-		// TODO 同期化が全くされていないので危険。
-		new Thread() {
-			@Override
-			public void run() {
+	private class DecodeTask implements Runnable {
+
+		private final int resId;
+		private float scale;
+		private GifDecoder decoder;
+		private int imageType;
+		private long time;
+		private int decodeStatus;
+
+		public DecodeTask(final int resId) {
+			this.resId = resId;
+		}
+
+		@Override
+		public void run() {
+			if (Thread.currentThread() != uiHandler.getLooper().getThread()) {
+				// worker threadでのデコード
 				scale = getScale();
 				decoder = new GifDecoder();
 				decoder.read(getInputStream());
@@ -159,11 +188,27 @@ public class GifView extends View {
 				} else {
 					imageType = IMAGE_TYPE_DYNAMIC;
 				}
-				postInvalidate();
 				time = System.currentTimeMillis();
 				decodeStatus = DECODE_STATUS_DECODED;
+				uiHandler.post(this);
+			} else {
+				// ui threadでのフィールドへのデータの適用
+				if (decodeTask != this) {
+					return;
+				}
+				
+				decodeTask = null;
+				GifView.this.resId = this.resId;
+				GifView.this.scale = this.scale;
+				GifView.this.decoder = this.decoder;
+				GifView.this.imageType = this.imageType;
+				GifView.this.time = this.time;
+				GifView.this.decodeStatus = this.decodeStatus;
+				invalidate();
 			}
-		}.start();
+
+		}
+
 	}
 
 	public void release() {
