@@ -1,7 +1,5 @@
 package jp.tomorrowkey.android.gifplayer;
 
-import java.io.InputStream;
-
 import android.annotation.TargetApi;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
@@ -9,13 +7,21 @@ import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.Paint.FontMetricsInt;
+import android.os.AsyncTask;
 import android.os.Build;
-import android.os.Handler;
+import android.support.annotation.UiThread;
 import android.text.style.ReplacementSpan;
+import android.util.Log;
 import android.util.TypedValue;
 import android.view.View;
+import android.widget.TextView;
 
-public class GifSpan extends ReplacementSpan implements Runnable {
+import java.io.InputStream;
+import java.lang.ref.WeakReference;
+
+public class GifSpan extends ReplacementSpan {
+
+	static final String TAG = GifSpan.class.getSimpleName();
 
 	static final int IMAGE_TYPE_UNKNOWN = 0;
 	static final int IMAGE_TYPE_DYNAMIC = 1;
@@ -34,21 +40,17 @@ public class GifSpan extends ReplacementSpan implements Runnable {
 
 	boolean playFlag = false;
 
-	final Handler bgHandler;
-	Handler uiHandler;
-	final View view;
+	final WeakReference<View> viewRef;
 	final int resId;
 	final int intrinsicWidth;
 	final int intrinsicHeight;
 	float scale;
 	final float scaleToTextSize;
 
-	public GifSpan(final Handler bgHandler, final View view, final int resId,
-			final float scaleToTextSize) {
-		this.view = view;
-		this.bgHandler = bgHandler;
+	public GifSpan(final TextView view, final int resId, final float scaleToTextSize) {
+		this.viewRef = new WeakReference(view);
 		this.resId = resId;
-		this.scaleToTextSize = scaleToTextSize; 
+		this.scaleToTextSize = scaleToTextSize;
 
 		final BitmapFactory.Options opts = new BitmapFactory.Options();
 		opts.inJustDecodeBounds = true;
@@ -56,11 +58,11 @@ public class GifSpan extends ReplacementSpan implements Runnable {
 		this.intrinsicWidth = opts.outWidth;
 		this.intrinsicHeight = opts.outHeight;
 
-		disableHardwareAccelation();
+		disableHardwareAccelation(view);
 	}
 
 	@TargetApi(Build.VERSION_CODES.HONEYCOMB)
-	private void disableHardwareAccelation() {
+	private void disableHardwareAccelation(View view) {
 		// ハードウェアアクセレーションが走っているとEditableなTextViewでinvalidate()が動かないので、
 		// 無効化する。
 		if (Build.VERSION.SDK_INT >= 11) {
@@ -71,11 +73,17 @@ public class GifSpan extends ReplacementSpan implements Runnable {
 	@Override
 	public int getSize(Paint paint, CharSequence text, int start, int end,
 			FontMetricsInt fm) {
+		final View view = validateView();
+		if (view == null) {
+			destroy();
+			return 0;
+		}
+
 		if (scaleToTextSize > 0) {
 			final float textSize = paint.getTextSize();
 			scale = scaleToTextSize * textSize / intrinsicHeight;
 		} else {
-			scale = getAutoScale();
+			scale = getAutoScale(view.getResources());
 		}
 
 		if (fm != null) {
@@ -91,9 +99,15 @@ public class GifSpan extends ReplacementSpan implements Runnable {
 	@Override
 	public void draw(Canvas canvas, CharSequence text, int start, int end,
 			float x, int top, int y, int bottom, Paint paint) {
+		final View view = validateView();
+		if (view == null) {
+			destroy();
+			return;
+		}
+
 		if (decodeStatus == DECODE_STATUS_UNDECODE) {
 			if (playFlag) {
-				decode();
+				decode(view.getResources());
 			}
 		} else if (decodeStatus == DECODE_STATUS_DECODED) {
 			if (imageType == IMAGE_TYPE_DYNAMIC) {
@@ -123,52 +137,36 @@ public class GifSpan extends ReplacementSpan implements Runnable {
 		}
 	}
 
-	private void decode() {
+
+	/**
+	 * @return null if view is invalid.
+     */
+	@UiThread
+	private View validateView() {
+		final View view = viewRef.get();
+		if (view == null) {
+			Log.w(TAG, "No view reference.");
+			return null;
+		}
+
+		if (view.getResources() == null) {
+			Log.w(TAG, "View has no resources. ");
+			return null;
+		}
+
+		return view;
+	}
+
+	@UiThread
+	private void decode(Resources res) {
 		index = 0;
-
-		uiHandler = view.getHandler();
 		decodeStatus = DECODE_STATUS_DECODING;
-
-		bgHandler.post(this);
+		new NewDecoderTask(res).execute();
 	}
 
-	// バックグランドでdecodeを実行。
-	@Override
-	public void run() {
-		final GifDecoder decoder = new GifDecoder();
-		decoder.read(getInputStream());
-		final int imageType;
-		if (decoder.width == 0 || decoder.height == 0) {
-			imageType = IMAGE_TYPE_UNKNOWN;
-		} else {
-			imageType = IMAGE_TYPE_DYNAMIC;
-		}
-		final long time = System.currentTimeMillis();
-		final int decodeStatus = DECODE_STATUS_DECODED;
-
-		uiHandler.post(new Runnable() {
-			@Override
-			public void run() {
-				GifSpan.this.decoder = decoder;
-				GifSpan.this.imageType = imageType;
-				GifSpan.this.time = time;
-				GifSpan.this.decodeStatus = decodeStatus;
-				view.invalidate();
-			}
-		});
-	};
-
-	InputStream getInputStream() {
-		if (resId > 0) {
-			return view.getResources().openRawResource(resId);
-		}
-		return null;
-	}
-
-	float getAutoScale() {
+	private float getAutoScale(Resources res) {
 		if (resId > 0) {
 			final TypedValue value = new TypedValue();
-			final Resources res = view.getResources();
 			res.getValue(resId, value, false);
 
 			if (value.density == TypedValue.DENSITY_NONE) {
@@ -188,13 +186,75 @@ public class GifSpan extends ReplacementSpan implements Runnable {
 		}
 	}
 
+	@UiThread
+	private void destroy() {
+		Log.d(TAG, "destroy");
+		decoder = null;
+	}
+
+	@UiThread
 	public void start() {
 		playFlag = true;
+		final View view = validateView();
+		if (view == null) {
+			destroy();
+			return;
+		}
 		view.invalidate();
 	}
 
+	@UiThread
 	public void pause() {
 		playFlag = false;
+		final View view = validateView();
+		if (view == null) {
+			destroy();
+			return;
+		}
 		view.invalidate();
+	}
+
+	private class NewDecoderTask extends AsyncTask<Void, Void, Void> {
+
+		private final Resources res;
+		private int newImageType;
+		private long newTime;
+		private GifDecoder newDecoder;
+
+		NewDecoderTask(Resources res) {
+			this.res = res;
+		}
+
+		@Override
+		protected Void doInBackground(Void... params) {
+			newDecoder = new GifDecoder();
+			newDecoder.read(getInputStream());
+			if (newDecoder.width == 0 || newDecoder.height == 0) {
+				newImageType = IMAGE_TYPE_UNKNOWN;
+			} else {
+				newImageType = IMAGE_TYPE_DYNAMIC;
+			}
+			newTime = System.currentTimeMillis();
+			return null;
+		}
+
+		private InputStream getInputStream() {
+			if (resId > 0) {
+				return res.openRawResource(resId);
+			}
+			return null;
+		}
+
+		@Override
+		protected void onPostExecute(Void aVoid) {
+			final View view = validateView();
+			if (view != null) {
+				view.invalidate();
+				decoder = newDecoder;
+				imageType = newImageType;
+				time = newTime;
+				decodeStatus = DECODE_STATUS_DECODED;
+			}
+		}
 	}
 }
