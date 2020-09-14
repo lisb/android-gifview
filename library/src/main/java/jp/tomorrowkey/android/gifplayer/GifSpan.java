@@ -9,12 +9,13 @@ import android.graphics.Paint;
 import android.graphics.Paint.FontMetricsInt;
 import android.os.AsyncTask;
 import android.os.Build;
-import android.support.annotation.UiThread;
 import android.text.style.ReplacementSpan;
 import android.util.Log;
 import android.util.TypedValue;
 import android.view.View;
 import android.widget.TextView;
+
+import androidx.annotation.UiThread;
 
 import java.io.InputStream;
 import java.lang.ref.WeakReference;

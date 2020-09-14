@@ -1,13 +1,13 @@
 apply plugin: 'com.android.application'
 
 android {
-    compileSdkVersion 16
-    buildToolsVersion "21.1.2"
+    compileSdkVersion android_compile_sdk_version
+    buildToolsVersion android_build_tools_version
 
     defaultConfig {
         applicationId "jp.tomorrowkey.android.gifplayer.example"
-        minSdkVersion 8
-        targetSdkVersion 16
+        minSdkVersion android_min_sdk_version
+        targetSdkVersion android_target_sdk_version
         versionCode 1
         versionName "1.0"
     }

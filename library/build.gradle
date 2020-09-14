@@ -1,30 +1,39 @@
 apply plugin: 'com.android.library'
-apply plugin: 'com.github.dcendents.android-maven'
-
-group = 'jp.tomorrowkey.android.gifplayer'
-archivesBaseName = 'gifplayer'
-version = '1.1.0'
+apply plugin: 'maven-publish'
 
 android {
-    compileSdkVersion 25
-    buildToolsVersion "21.1.2"
+    compileSdkVersion android_compile_sdk_version
+    buildToolsVersion android_build_tools_version
 
     defaultConfig {
-        minSdkVersion 8
-        targetSdkVersion 25
+        minSdkVersion android_min_sdk_version
+        targetSdkVersion android_target_sdk_version
     }
 }
 
 dependencies {
-    compile "com.android.support:support-annotations:25.1.1"
+    implementation "androidx.annotation:annotation:1.1.0"
 }
 
-task androidSourcesJar(type: Jar) {
-    classifier = 'sources'
-    from android.sourceSets.main.java.source
+afterEvaluate {
+    publishing {
+        repositories {
+            maven {
+                name = "GitHubPackages"
+                url = "https://maven.pkg.github.com/lisb/android-gifview"
+                credentials {
+                    username = gpr_user
+                    password = gpr_password
+                }
+            }
+        }
+        publications {
+            release(MavenPublication) {
+                from components.release
+                groupId = 'jp.tomorrowkey.android.gifplayer'
+                artifactId = 'gifplayer'
+                version = '1.1.1'
+            }
+        }
+    }
 }
-
-artifacts {
-   archives androidSourcesJar
-}
-
