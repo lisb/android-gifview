@@ -1,6 +1,6 @@
 package jp.tomorrowkey.android.gifplayer;
 
-import android.annotation.TargetApi;
+import android.content.Context;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -8,11 +8,13 @@ import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.Paint.FontMetricsInt;
 import android.os.AsyncTask;
-import android.os.Build;
+import android.text.Editable;
+import android.text.Spannable;
 import android.text.style.ReplacementSpan;
 import android.util.Log;
 import android.util.TypedValue;
 import android.view.View;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.TextView;
 
 import androidx.annotation.UiThread;
@@ -22,7 +24,7 @@ import java.lang.ref.WeakReference;
 
 public class GifSpan extends ReplacementSpan {
 
-	static final String TAG = GifSpan.class.getSimpleName();
+	static final String TAG = "GifSpan";
 
 	static final int IMAGE_TYPE_UNKNOWN = 0;
 	static final int IMAGE_TYPE_DYNAMIC = 1;
@@ -36,20 +38,28 @@ public class GifSpan extends ReplacementSpan {
 	int imageType = IMAGE_TYPE_UNKNOWN;
 	int decodeStatus = DECODE_STATUS_UNDECODE;
 
-	long time;
-	int index;
+	long startTime;
+	long pauseTime;
+	long length;
 
 	boolean playFlag = false;
 
-	final WeakReference<View> viewRef;
+	final WeakReference<TextView> viewRef;
 	final int resId;
 	final int intrinsicWidth;
 	final int intrinsicHeight;
 	float scale;
 	final float scaleToTextSize;
 
+	private final Runnable replaceSpanCmd = new Runnable() {
+		@Override
+		public void run() {
+			replaceSpan();
+		}
+	};
+
 	public GifSpan(final TextView view, final int resId, final float scaleToTextSize) {
-		this.viewRef = new WeakReference(view);
+		this.viewRef = new WeakReference<>(view);
 		this.resId = resId;
 		this.scaleToTextSize = scaleToTextSize;
 
@@ -58,17 +68,6 @@ public class GifSpan extends ReplacementSpan {
 		BitmapFactory.decodeResource(view.getResources(), resId, opts);
 		this.intrinsicWidth = opts.outWidth;
 		this.intrinsicHeight = opts.outHeight;
-
-		disableHardwareAccelation(view);
-	}
-
-	@TargetApi(Build.VERSION_CODES.HONEYCOMB)
-	private void disableHardwareAccelation(View view) {
-		// ハードウェアアクセレーションが走っているとEditableなTextViewでinvalidate()が動かないので、
-		// 無効化する。
-		if (Build.VERSION.SDK_INT >= 11) {
-			view.setLayerType(View.LAYER_TYPE_SOFTWARE, null);
-		}
 	}
 
 	@Override
@@ -100,12 +99,11 @@ public class GifSpan extends ReplacementSpan {
 	@Override
 	public void draw(Canvas canvas, CharSequence text, int start, int end,
 			float x, int top, int y, int bottom, Paint paint) {
-		final View view = validateView();
+		final TextView view = validateView();
 		if (view == null) {
 			destroy();
 			return;
 		}
-
 		if (decodeStatus == DECODE_STATUS_UNDECODE) {
 			if (playFlag) {
 				decode(view.getResources());
@@ -117,41 +115,68 @@ public class GifSpan extends ReplacementSpan {
 						bottom - Math.round(intrinsicHeight * scale));
 				canvas.scale(scale, scale);
 				if (playFlag) {
-					long now = System.currentTimeMillis();
-
-					if (time + decoder.getDelay(index) < now) {
-						// TODO indexを一つインクリメントするだけではなく、正しい位置までindexを増やすようにする
-						time = now;
-						incrementFrameIndex();
+					final long now = System.currentTimeMillis();
+					long dt = (now - startTime) % length;
+					for (int i = 0; i < decoder.frameCount; i++) {
+						dt -= decoder.getDelay(i);
+						if (dt <= 0) {
+							final Bitmap bitmap = decoder.getFrame(i);
+							if (bitmap != null) {
+								canvas.drawBitmap(bitmap, 0, 0, null);
+							}
+							if (dt == 0) {
+								viewInvalidate(decoder.getDelay((i + 1) % decoder.frameCount));
+							} else {
+								viewInvalidate(-dt);
+							}
+							break;
+						}
 					}
-					Bitmap bitmap = decoder.getFrame(index);
-					if (bitmap != null) {
-						canvas.drawBitmap(bitmap, 0, 0, null);
-					}
-					view.invalidate();
 				} else {
-					Bitmap bitmap = decoder.getFrame(index);
-					canvas.drawBitmap(bitmap, 0, 0, null);
+					long dt = (pauseTime - startTime) % length;
+					for (int i = 0; i < decoder.frameCount; i++) {
+						dt -= decoder.getDelay(i);
+						if (dt <= 0) {
+							final Bitmap bitmap = decoder.getFrame(i);
+							if (bitmap != null) {
+								canvas.drawBitmap(bitmap, 0, 0, null);
+							}
+							break;
+						}
+					}
 				}
 				canvas.restore();
 			}
 		}
 	}
 
-
 	/**
 	 * @return null if view is invalid.
      */
 	@UiThread
-	private View validateView() {
-		final View view = viewRef.get();
+	private TextView validateView() {
+		final TextView view = viewRef.get();
 		if (view == null) {
 			Log.w(TAG, "No view reference.");
 			return null;
 		}
 
 		if (view.getResources() == null) {
-			Log.w(TAG, "View has no resources. ");
+			Log.w(TAG, "View has no resources.");
+			return null;
+		}
+
+		final CharSequence currentText = view.getText();
+		final boolean isSpannable = currentText instanceof Spannable;
+		if (!isSpannable) {
+			Log.w(TAG, "View text is not Spannable.");
+			return null;
+		}
+
+		final Spannable currentTextSpannable = (Spannable) currentText;
+		final int spanStart = currentTextSpannable.getSpanStart(this);
+		if (spanStart == -1) {
+			Log.w(TAG, "View text doesn't contain this span");
 			return null;
 		}
 
@@ -160,7 +185,6 @@ public class GifSpan extends ReplacementSpan {
 
 	@UiThread
 	private void decode(Resources res) {
-		index = 0;
 		decodeStatus = DECODE_STATUS_DECODING;
 		new NewDecoderTask(res).execute();
 	}
@@ -180,13 +204,6 @@ public class GifSpan extends ReplacementSpan {
 		return 0;
 	}
 
-	private void incrementFrameIndex() {
-		index++;
-		if (index >= decoder.getFrameCount()) {
-			index = 0;
-		}
-	}
-
 	@UiThread
 	private void destroy() {
 		Log.d(TAG, "destroy");
@@ -201,7 +218,10 @@ public class GifSpan extends ReplacementSpan {
 			destroy();
 			return;
 		}
-		view.invalidate();
+		// すでに進んでいる分を考慮。
+		// ロードがまだ終わっていない場合、ロード時に startTime が改めて設定される
+		startTime = System.currentTimeMillis() - (pauseTime - startTime);
+		viewInvalidate(0);
 	}
 
 	@UiThread
@@ -212,7 +232,54 @@ public class GifSpan extends ReplacementSpan {
 			destroy();
 			return;
 		}
-		view.invalidate();
+		pauseTime = System.currentTimeMillis();
+		viewInvalidate(0);
+	}
+
+	private void replaceSpan() {
+		final TextView view = validateView();
+		if (view == null) {
+			return;
+		}
+
+		final Editable editableText = view.getEditableText();
+		if (editableText == null) {
+			return;
+		}
+
+		final int spanStart = editableText.getSpanStart(this);
+		if (spanStart == -1) {
+			return;
+		}
+
+		final int spanEnd = editableText.getSpanEnd(this);
+		final int spanFlags = editableText.getSpanFlags(this);
+		editableText.removeSpan(this);
+		editableText.setSpan(this, spanStart, spanEnd, spanFlags);
+		view.removeCallbacks(replaceSpanCmd);
+	}
+
+	private void viewInvalidate(final long delay) {
+		final TextView view = validateView();
+		if (view == null) {
+			return;
+		}
+
+		final Editable editableText = view.getEditableText();
+		if (editableText != null) {
+			// If text is Editable, TextView#invalidate don't cause a redraw
+			if (delay == 0) {
+				replaceSpan();
+			} else {
+				view.postDelayed(replaceSpanCmd, delay);
+			}
+		} else {
+			if (delay == 0) {
+				view.invalidate();
+			} else {
+				view.postInvalidateDelayed(delay);
+			}
+		}
 	}
 
 	private class NewDecoderTask extends AsyncTask<Void, Void, Void> {
@@ -250,11 +317,16 @@ public class GifSpan extends ReplacementSpan {
 		protected void onPostExecute(Void aVoid) {
 			final View view = validateView();
 			if (view != null) {
-				view.invalidate();
+				viewInvalidate(0);
 				decoder = newDecoder;
 				imageType = newImageType;
-				time = newTime;
+				startTime = newTime;
 				decodeStatus = DECODE_STATUS_DECODED;
+				long newLength = 0L;
+				for (int i = 0; i < newDecoder.frameCount; i++) {
+					newLength += newDecoder.getDelay(i);
+				}
+				length = newLength;
 			}
 		}
 	}
