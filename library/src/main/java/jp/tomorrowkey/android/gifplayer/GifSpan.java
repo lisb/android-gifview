@@ -8,7 +8,6 @@ import android.graphics.Paint;
 import android.graphics.Paint.FontMetricsInt;
 import android.os.AsyncTask;
 import android.text.Editable;
-import android.text.Spannable;
 import android.text.style.ReplacementSpan;
 import android.util.TypedValue;
 import android.view.View;
@@ -53,13 +52,6 @@ public class GifSpan extends ReplacementSpan {
 	float scale;
 	final float scaleToTextSize;
 
-	private final Runnable replaceSpanCmd = new Runnable() {
-		@Override
-		public void run() {
-			replaceSpan();
-		}
-	};
-
 	public GifSpan(final TextView view, final int resId, final float scaleToTextSize) {
 		this.viewRef = new WeakReference<>(view);
 		this.resId = resId;
@@ -75,9 +67,12 @@ public class GifSpan extends ReplacementSpan {
 	@Override
 	public int getSize(Paint paint, CharSequence text, int start, int end,
 			FontMetricsInt fm) {
-		final View view = validateView();
+		final TextView view = viewRef.get();
 		Timber.tag(TAG).v("getSize. isNull(view):%b", view == null);
 		if (view == null) {
+			return 0;
+		}
+		if (!text.equals(view.getText())) {
 			return 0;
 		}
 
@@ -101,11 +96,15 @@ public class GifSpan extends ReplacementSpan {
 	@Override
 	public void draw(Canvas canvas, CharSequence text, int start, int end,
 			float x, int top, int y, int bottom, Paint paint) {
-		final TextView view = validateView();
+		final TextView view = viewRef.get();
 		Timber.tag(TAG).v("draw. isNull(view):%b", view == null);
 		if (view == null) {
 			return;
 		}
+		if (!text.equals(view.getText())) {
+			return;
+		}
+
 		if (decodeStatus == DECODE_STATUS_UNDECODE) {
 			if (playFlag) {
 				decode(view.getResources());
@@ -136,9 +135,9 @@ public class GifSpan extends ReplacementSpan {
 									canvas.drawBitmap(bitmap, 0, 0, null);
 								}
 								if (dt == 0) {
-									viewInvalidate(getSafeDelay((i + 1) % decoder.frameCount));
+									invalidateView(getSafeDelay((i + 1) % decoder.frameCount));
 								} else {
-									viewInvalidate(-dt);
+									invalidateView(-dt);
 								}
 								break;
 							}
@@ -171,39 +170,6 @@ public class GifSpan extends ReplacementSpan {
 		}
 	}
 
-	/**
-	 * @return null if view is invalid.
-     */
-	@UiThread
-	private TextView validateView() {
-		final TextView view = viewRef.get();
-		if (view == null) {
-			Timber.tag(TAG).w("No view reference.");
-			return null;
-		}
-
-		if (view.getResources() == null) {
-			Timber.tag(TAG).w("View has no resources.");
-			return null;
-		}
-
-		final CharSequence currentText = view.getText();
-		final boolean isSpannable = currentText instanceof Spannable;
-		if (!isSpannable) {
-			Timber.tag(TAG).w("View text is not Spannable.");
-			return null;
-		}
-
-		final Spannable currentTextSpannable = (Spannable) currentText;
-		final int spanStart = currentTextSpannable.getSpanStart(this);
-		if (spanStart == -1) {
-			Timber.tag(TAG).w("View text doesn't contain this span");
-			return null;
-		}
-
-		return view;
-	}
-
 	@UiThread
 	private void decode(Resources res) {
 		decodeStatus = DECODE_STATUS_DECODING;
@@ -231,64 +197,33 @@ public class GifSpan extends ReplacementSpan {
 		// すでに進んでいる分を考慮。
 		// ロードがまだ終わっていない場合、ロード時に startTime が改めて設定される
 		startTime = System.currentTimeMillis() - (pauseTime - startTime);
-		viewInvalidate(0);
+		invalidateView(0);
 	}
 
 	@UiThread
 	public void pause() {
 		playFlag = false;
 		pauseTime = System.currentTimeMillis();
-		viewInvalidate(0);
+		invalidateView(0);
 	}
 
-	/**
-	 * Replace the span with new span to draw immediately for Editable text.
-	 */
-	private void replaceSpan() {
-		final TextView view = validateView();
-		Timber.tag(TAG).v("replaceSpan. isNull(view):%b", view == null);
+	private void invalidateView(final long delay) {
+		final TextView view = viewRef.get();
+		Timber.tag(TAG).v("invalidateView:%d, isNull(view):%b", delay, view == null);
 		if (view == null) {
 			return;
 		}
 
 		final Editable editableText = view.getEditableText();
-		if (editableText == null) {
-			return;
+		if (editableText != null && view.getLayerType() != View.LAYER_TYPE_SOFTWARE) {
+			// If text is editable, View#invalidate() doesn't re-draw GifSpan.
+			view.setLayerType(View.LAYER_TYPE_SOFTWARE, null);
 		}
 
-		final int spanStart = editableText.getSpanStart(this);
-		if (spanStart == -1) {
-			return;
-		}
-
-		final int spanEnd = editableText.getSpanEnd(this);
-		final int spanFlags = editableText.getSpanFlags(this);
-		editableText.removeSpan(this);
-		editableText.setSpan(this, spanStart, spanEnd, spanFlags);
-		view.removeCallbacks(replaceSpanCmd);
-	}
-
-	private void viewInvalidate(final long delay) {
-		final TextView view = validateView();
-		Timber.tag(TAG).v("viewInvalidate:%d, isNull(view):%b", delay, view == null);
-		if (view == null) {
-			return;
-		}
-
-		final Editable editableText = view.getEditableText();
-		if (editableText != null) {
-			// If text is Editable, TextView#invalidate don't cause a redraw
-			if (delay == 0) {
-				replaceSpan();
-			} else {
-				view.postDelayed(replaceSpanCmd, delay);
-			}
+		if (delay == 0) {
+			view.invalidate();
 		} else {
-			if (delay == 0) {
-				view.invalidate();
-			} else {
-				view.postInvalidateDelayed(delay);
-			}
+			view.postInvalidateDelayed(delay);
 		}
 	}
 
@@ -336,7 +271,7 @@ public class GifSpan extends ReplacementSpan {
 			length = newLength;
 			Timber.tag(TAG).v("Load completed. imageType:%s, frameCount:%d, length:%d",
 					imageType, newDecoder.frameCount, length);
-			viewInvalidate(0);
+			invalidateView(0);
 		}
 	}
 }
