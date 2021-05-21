@@ -72,7 +72,9 @@ public class GifSpan extends ReplacementSpan {
 		if (view == null) {
 			return 0;
 		}
-		if (!text.equals(view.getText())) {
+		if (text != view.getText()) {
+			// Don't use equals because SpannableStringBuilder#equals was broken
+			// https://android.googlesource.com/platform/frameworks/base/+/6b4380ea5f71f031d1105d8986c813fefe056794
 			return 0;
 		}
 
@@ -101,7 +103,9 @@ public class GifSpan extends ReplacementSpan {
 		if (view == null) {
 			return;
 		}
-		if (!text.equals(view.getText())) {
+		if (text != view.getText()) {
+			// Don't use equals because SpannableStringBuilder#equals was broken
+			// https://android.googlesource.com/platform/frameworks/base/+/6b4380ea5f71f031d1105d8986c813fefe056794
 			return;
 		}
 
