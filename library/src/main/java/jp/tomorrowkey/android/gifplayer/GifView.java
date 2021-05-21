@@ -12,13 +12,14 @@ import android.graphics.Canvas;
 import android.os.Handler;
 import android.util.AttributeSet;
 import android.util.DisplayMetrics;
-import android.util.Log;
 import android.util.TypedValue;
 import android.view.View;
 
+import timber.log.Timber;
+
 public class GifView extends View {
 
-    private static final String TAG = GifView.class.getSimpleName();
+    private static final String TAG = "GifView";
 
 	public static final int IMAGE_TYPE_UNKNOWN = 0;
 	public static final int IMAGE_TYPE_STATIC = 1;
@@ -180,7 +181,8 @@ public class GifView extends View {
 		intrinsicWidth = bitmap.getWidth();
 		intrinsicHeight = bitmap.getHeight();
 
-        Log.d(TAG, "gif set. intrinsicWidth:" + intrinsicWidth + ", intrinsicHeight:" + intrinsicHeight);
+		Timber.tag(TAG).d("gif set. intrinsicWidth:%d, intrinsicHeight:%d",
+				intrinsicWidth, intrinsicHeight);
 	}
 
 	// attachされていない状態では呼び出せない
@@ -282,11 +284,9 @@ public class GifView extends View {
                     widthMeasureSpec), measureSize(this.intrinsicHeight + paddingHeight,
                     heightMeasureSpec));
         }
-        Log.d(TAG,
-                "onMeasured. widthMode:" + widthMode + ", heightMode:" + heightMode +
-                        ", width:" + width + ", height:" + height +
-                        ", instrinsicWidth:" + intrinsicWidth + ", instrinsicHeight:" + intrinsicHeight +
-                        ", measuredWidth:" + getMeasuredWidth() + ", measuredHeight:" + getMeasuredHeight());
+		Timber.tag(TAG).v("onMeasured. widthMode:%d, heightMode:%d, width:%d, height:%d, instrinsicWidth:%d, instrinsicHeight:%d, measuredWidth:%d, measuredHeight:%d",
+				widthMode, heightMode, width, height, intrinsicWidth, intrinsicHeight,
+				getMeasuredWidth(), getMeasuredHeight());
 	}
 
     private static int measureSize(int instrinsicSize, int measureSpec) {

@@ -10,7 +10,6 @@ import android.os.AsyncTask;
 import android.text.Editable;
 import android.text.Spannable;
 import android.text.style.ReplacementSpan;
-import android.util.Log;
 import android.util.TypedValue;
 import android.view.View;
 import android.widget.TextView;
@@ -179,26 +178,26 @@ public class GifSpan extends ReplacementSpan {
 	private TextView validateView() {
 		final TextView view = viewRef.get();
 		if (view == null) {
-			Log.w(TAG, "No view reference.");
+			Timber.tag(TAG).w("No view reference.");
 			return null;
 		}
 
 		if (view.getResources() == null) {
-			Log.w(TAG, "View has no resources.");
+			Timber.tag(TAG).w("View has no resources.");
 			return null;
 		}
 
 		final CharSequence currentText = view.getText();
 		final boolean isSpannable = currentText instanceof Spannable;
 		if (!isSpannable) {
-			Log.w(TAG, "View text is not Spannable.");
+			Timber.tag(TAG).w("View text is not Spannable.");
 			return null;
 		}
 
 		final Spannable currentTextSpannable = (Spannable) currentText;
 		final int spanStart = currentTextSpannable.getSpanStart(this);
 		if (spanStart == -1) {
-			Log.w(TAG, "View text doesn't contain this span");
+			Timber.tag(TAG).w("View text doesn't contain this span");
 			return null;
 		}
 
@@ -228,7 +227,7 @@ public class GifSpan extends ReplacementSpan {
 
 	@UiThread
 	private void destroy() {
-		Log.d(TAG, "destroy");
+		Timber.tag(TAG).v("destroy");
 		decoder = null;
 	}
 
