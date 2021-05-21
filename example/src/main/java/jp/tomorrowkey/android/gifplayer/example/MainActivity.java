@@ -14,12 +14,14 @@ import android.widget.TextView;
 
 import jp.tomorrowkey.android.gifplayer.GifSpan;
 import jp.tomorrowkey.android.gifplayer.GifView;
+import timber.log.Timber;
 
 public class MainActivity extends Activity implements OnClickListener {
 
 	private GifView gifView;
 
 	static {
+		Timber.plant(new Timber.DebugTree());
         final HandlerThread thread = new HandlerThread("gifplayer-background");
         thread.start();
         GifView.setBgHandler(new Handler(thread.getLooper()));

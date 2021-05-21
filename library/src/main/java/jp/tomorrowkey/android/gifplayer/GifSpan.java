@@ -1,6 +1,5 @@
 package jp.tomorrowkey.android.gifplayer;
 
-import android.content.Context;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -14,13 +13,14 @@ import android.text.style.ReplacementSpan;
 import android.util.Log;
 import android.util.TypedValue;
 import android.view.View;
-import android.view.inputmethod.InputMethodManager;
 import android.widget.TextView;
 
 import androidx.annotation.UiThread;
 
 import java.io.InputStream;
 import java.lang.ref.WeakReference;
+
+import timber.log.Timber;
 
 public class GifSpan extends ReplacementSpan {
 
@@ -32,6 +32,9 @@ public class GifSpan extends ReplacementSpan {
 	static final int DECODE_STATUS_UNDECODE = 0;
 	static final int DECODE_STATUS_DECODING = 1;
 	static final int DECODE_STATUS_DECODED = 2;
+
+	/** Use if delay is negative */
+	static final int SAFE_DELAY_MS = 100;
 
 	GifDecoder decoder;
 
@@ -110,43 +113,62 @@ public class GifSpan extends ReplacementSpan {
 			}
 		} else if (decodeStatus == DECODE_STATUS_DECODED) {
 			if (imageType == IMAGE_TYPE_DYNAMIC) {
+				if (decoder.frameCount <= 0) {
+					return;
+				}
 				canvas.save();
 				canvas.translate(x,
 						bottom - Math.round(intrinsicHeight * scale));
 				canvas.scale(scale, scale);
-				if (playFlag) {
-					final long now = System.currentTimeMillis();
-					long dt = (now - startTime) % length;
-					for (int i = 0; i < decoder.frameCount; i++) {
-						dt -= decoder.getDelay(i);
-						if (dt <= 0) {
-							final Bitmap bitmap = decoder.getFrame(i);
-							if (bitmap != null) {
-								canvas.drawBitmap(bitmap, 0, 0, null);
-							}
-							if (dt == 0) {
-								viewInvalidate(decoder.getDelay((i + 1) % decoder.frameCount));
-							} else {
-								viewInvalidate(-dt);
-							}
-							break;
-						}
+				if (decoder.frameCount == 1) {
+					final Bitmap bitmap = decoder.getFrame(0);
+					if (bitmap != null) {
+						canvas.drawBitmap(bitmap, 0, 0, null);
 					}
-				} else {
-					long dt = (pauseTime - startTime) % length;
-					for (int i = 0; i < decoder.frameCount; i++) {
-						dt -= decoder.getDelay(i);
-						if (dt <= 0) {
-							final Bitmap bitmap = decoder.getFrame(i);
-							if (bitmap != null) {
-								canvas.drawBitmap(bitmap, 0, 0, null);
+				} else if (decoder.frameCount > 1) {
+					if (playFlag) {
+						final long now = System.currentTimeMillis();
+						long dt = (now - startTime) % length;
+						for (int i = 0; i < decoder.frameCount; i++) {
+							dt -= getSafeDelay(i);
+							if (dt <= 0) {
+								final Bitmap bitmap = decoder.getFrame(i);
+								if (bitmap != null) {
+									canvas.drawBitmap(bitmap, 0, 0, null);
+								}
+								if (dt == 0) {
+									viewInvalidate(getSafeDelay((i + 1) % decoder.frameCount));
+								} else {
+									viewInvalidate(-dt);
+								}
+								break;
 							}
-							break;
+						}
+					} else {
+						long dt = (pauseTime - startTime) % length;
+						for (int i = 0; i < decoder.frameCount; i++) {
+							dt -= getSafeDelay(i);
+							if (dt <= 0) {
+								final Bitmap bitmap = decoder.getFrame(i);
+								if (bitmap != null) {
+									canvas.drawBitmap(bitmap, 0, 0, null);
+								}
+								break;
+							}
 						}
 					}
 				}
 				canvas.restore();
 			}
+		}
+	}
+
+	private int getSafeDelay(final int n) {
+		final int delay = decoder.getDelay(n);
+		if (delay > 0) {
+			return delay;
+		} else {
+			return SAFE_DELAY_MS;
 		}
 	}
 
@@ -324,9 +346,11 @@ public class GifSpan extends ReplacementSpan {
 				decodeStatus = DECODE_STATUS_DECODED;
 				long newLength = 0L;
 				for (int i = 0; i < newDecoder.frameCount; i++) {
-					newLength += newDecoder.getDelay(i);
+					newLength += getSafeDelay(i);
 				}
 				length = newLength;
+				Timber.tag(TAG).v("Load completed. imageType:%s, frameCount:%d, length:%d",
+						imageType, newDecoder.frameCount, length);
 			}
 		}
 	}
