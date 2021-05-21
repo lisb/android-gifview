@@ -51,6 +51,7 @@ public class MainActivity extends Activity implements OnClickListener {
 		final GifSpan span = new GifSpan(editText, R.drawable.break_droid, 10);
 		span.start();
 		sb.setSpan(span, 0, sb.length(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+		editText.setSaveEnabled(false);
 		editText.setText(sb, TextView.BufferType.EDITABLE);
 	}
 

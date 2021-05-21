@@ -76,8 +76,8 @@ public class GifSpan extends ReplacementSpan {
 	public int getSize(Paint paint, CharSequence text, int start, int end,
 			FontMetricsInt fm) {
 		final View view = validateView();
+		Timber.tag(TAG).v("getSize. isNull(view):%b", view == null);
 		if (view == null) {
-			destroy();
 			return 0;
 		}
 
@@ -102,8 +102,8 @@ public class GifSpan extends ReplacementSpan {
 	public void draw(Canvas canvas, CharSequence text, int start, int end,
 			float x, int top, int y, int bottom, Paint paint) {
 		final TextView view = validateView();
+		Timber.tag(TAG).v("draw. isNull(view):%b", view == null);
 		if (view == null) {
-			destroy();
 			return;
 		}
 		if (decodeStatus == DECODE_STATUS_UNDECODE) {
@@ -226,19 +226,8 @@ public class GifSpan extends ReplacementSpan {
 	}
 
 	@UiThread
-	private void destroy() {
-		Timber.tag(TAG).v("destroy");
-		decoder = null;
-	}
-
-	@UiThread
 	public void start() {
 		playFlag = true;
-		final View view = validateView();
-		if (view == null) {
-			destroy();
-			return;
-		}
 		// すでに進んでいる分を考慮。
 		// ロードがまだ終わっていない場合、ロード時に startTime が改めて設定される
 		startTime = System.currentTimeMillis() - (pauseTime - startTime);
@@ -248,17 +237,16 @@ public class GifSpan extends ReplacementSpan {
 	@UiThread
 	public void pause() {
 		playFlag = false;
-		final View view = validateView();
-		if (view == null) {
-			destroy();
-			return;
-		}
 		pauseTime = System.currentTimeMillis();
 		viewInvalidate(0);
 	}
 
+	/**
+	 * Replace the span with new span to draw immediately for Editable text.
+	 */
 	private void replaceSpan() {
 		final TextView view = validateView();
+		Timber.tag(TAG).v("replaceSpan. isNull(view):%b", view == null);
 		if (view == null) {
 			return;
 		}
@@ -282,6 +270,7 @@ public class GifSpan extends ReplacementSpan {
 
 	private void viewInvalidate(final long delay) {
 		final TextView view = validateView();
+		Timber.tag(TAG).v("viewInvalidate:%d, isNull(view):%b", delay, view == null);
 		if (view == null) {
 			return;
 		}
@@ -336,21 +325,18 @@ public class GifSpan extends ReplacementSpan {
 
 		@Override
 		protected void onPostExecute(Void aVoid) {
-			final View view = validateView();
-			if (view != null) {
-				viewInvalidate(0);
-				decoder = newDecoder;
-				imageType = newImageType;
-				startTime = newTime;
-				decodeStatus = DECODE_STATUS_DECODED;
-				long newLength = 0L;
-				for (int i = 0; i < newDecoder.frameCount; i++) {
-					newLength += getSafeDelay(i);
-				}
-				length = newLength;
-				Timber.tag(TAG).v("Load completed. imageType:%s, frameCount:%d, length:%d",
-						imageType, newDecoder.frameCount, length);
+			decoder = newDecoder;
+			imageType = newImageType;
+			startTime = newTime;
+			decodeStatus = DECODE_STATUS_DECODED;
+			long newLength = 0L;
+			for (int i = 0; i < newDecoder.frameCount; i++) {
+				newLength += getSafeDelay(i);
 			}
+			length = newLength;
+			Timber.tag(TAG).v("Load completed. imageType:%s, frameCount:%d, length:%d",
+					imageType, newDecoder.frameCount, length);
+			viewInvalidate(0);
 		}
 	}
 }
