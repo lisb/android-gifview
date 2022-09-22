@@ -108,7 +108,6 @@ public class GifSpan extends ReplacementSpan {
 		if (text instanceof Spanned) {
 			Spanned spanned = (Spanned) text;
 			if (spanned.getSpanStart(this) == -1) {
-				Timber.tag(TAG).d("return");
 				return;
 			}
 		}
