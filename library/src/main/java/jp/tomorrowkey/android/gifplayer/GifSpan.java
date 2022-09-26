@@ -8,6 +8,7 @@ import android.graphics.Paint;
 import android.graphics.Paint.FontMetricsInt;
 import android.os.AsyncTask;
 import android.text.Editable;
+import android.text.Spanned;
 import android.text.style.ReplacementSpan;
 import android.util.TypedValue;
 import android.view.View;
@@ -72,10 +73,11 @@ public class GifSpan extends ReplacementSpan {
 		if (view == null) {
 			return 0;
 		}
-		if (text != view.getText()) {
-			// Don't use equals because SpannableStringBuilder#equals was broken
-			// https://android.googlesource.com/platform/frameworks/base/+/6b4380ea5f71f031d1105d8986c813fefe056794
-			return 0;
+		if (text instanceof Spanned) {
+			Spanned spanned = (Spanned) text;
+			if (spanned.getSpanStart(this) == -1) {
+				return 0;
+			}
 		}
 
 		if (scaleToTextSize > 0) {
@@ -103,10 +105,11 @@ public class GifSpan extends ReplacementSpan {
 		if (view == null) {
 			return;
 		}
-		if (text != view.getText()) {
-			// Don't use equals because SpannableStringBuilder#equals was broken
-			// https://android.googlesource.com/platform/frameworks/base/+/6b4380ea5f71f031d1105d8986c813fefe056794
-			return;
+		if (text instanceof Spanned) {
+			Spanned spanned = (Spanned) text;
+			if (spanned.getSpanStart(this) == -1) {
+				return;
+			}
 		}
 
 		if (decodeStatus == DECODE_STATUS_UNDECODE) {
