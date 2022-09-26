@@ -6,11 +6,13 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.text.Editable;
 import android.text.Spannable;
+import android.text.SpannableStringBuilder;
 import android.text.TextWatcher;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.TextView;
 
 import jp.tomorrowkey.android.gifplayer.GifSpan;
 import jp.tomorrowkey.android.gifplayer.GifView;
@@ -22,6 +24,7 @@ public class MainActivity extends Activity implements OnClickListener, TextWatch
 
 	private GifView gifView;
 	private EditText editText;
+	private TextView textView;
 
 	static {
 		Timber.plant(new Timber.DebugTree());
@@ -41,6 +44,9 @@ public class MainActivity extends Activity implements OnClickListener, TextWatch
 		final Button btnStop = findViewById(R.id.btnStop);
 		final Button btnPrevFrame = findViewById(R.id.btnPrevFrame);
 		final Button btnNextFrame = findViewById(R.id.btnNextFrame);
+		final Button btnInput = findViewById(R.id.btnInput);
+		final Button btnClear = findViewById(R.id.btnClear);
+		textView = findViewById(R.id.textView);
 		editText = findViewById(R.id.editText);
 
 		gifView.setGif(R.drawable.break_droid);
@@ -49,6 +55,8 @@ public class MainActivity extends Activity implements OnClickListener, TextWatch
 		btnStop.setOnClickListener(this);
 		btnPrevFrame.setOnClickListener(this);
 		btnNextFrame.setOnClickListener(this);
+		btnInput.setOnClickListener(this);
+		btnClear.setOnClickListener(this);
 
 		editText.addTextChangedListener(this);
 	}
@@ -66,6 +74,10 @@ public class MainActivity extends Activity implements OnClickListener, TextWatch
 			gifView.prevFrame();
 		} else if (id == R.id.btnNextFrame) {
 			gifView.nextFrame();
+		} else if (id == R.id.btnInput) {
+			inputText();
+		} else if (id == R.id.btnClear) {
+			clearText();
 		}
 	}
 
@@ -87,6 +99,10 @@ public class MainActivity extends Activity implements OnClickListener, TextWatch
 		}
 	}
 
+	@Override
+	public void afterTextChanged(Editable editable) {
+	}
+
 	private boolean hasGifSpan(final Spannable s, final int position) {
 		final GifSpan[] gifSpans = s.getSpans(position, position + 1, GifSpan.class);
 		if (gifSpans != null) {
@@ -104,8 +120,22 @@ public class MainActivity extends Activity implements OnClickListener, TextWatch
 		return false;
 	}
 
-	@Override
-	public void afterTextChanged(Editable s) {
+	private void inputText() {
+		CharSequence s = editText.getText();
+		final Spannable spannable = new SpannableStringBuilder(s.toString());
+		final int count = spannable.length();
 
+		for (int i = 0; i < count; i++) {
+			if (hasGifSpan(spannable, i)) continue;
+			final GifSpan span = new GifSpan(textView, R.drawable.break_droid, 1.4f);
+			span.start();
+			spannable.setSpan(span, i, i + 1,
+					Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+		}
+		textView.setText(spannable, TextView.BufferType.SPANNABLE);
+	}
+
+	private void clearText() {
+		editText.getText().clear();
 	}
 }
