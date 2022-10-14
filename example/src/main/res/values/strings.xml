@@ -6,4 +6,7 @@
   <string name="stop">stop</string>
   <string name="next_frame">next frame</string>
   <string name="prev_frame">prev frame</string>
+  <string name="input">input</string>
+  <string name="clear">clear</string>
+  <string name="SpannedEllipsizer_text">SpannedEllipsizer text</string>
 </resources>
